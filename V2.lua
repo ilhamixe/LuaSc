@@ -1,8 +1,8 @@
 --[[
-    FISCH ULTIMATE V3 - IPAD STABLE (FIXED TOGGLE)
-    - Fix: Floating Icon won't pop up menu
-    - New: Force Re-scan Logic for iPad
-    - New: Loading & Ready Notifications
+    FISCH ULTIMATE V3 - IPAD SPECIAL (NO HINT)
+    - Fix: Hilangkan tulisan "Press End to toggle"
+    - Fix: Force Pop-up Menu via IXE Icon
+    - Fix: Live Stats & Notif Ready
 ]]
 
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -10,7 +10,7 @@ local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/
 -- [[ STARTUP NOTIF ]]
 Fluent:Notify({
     Title = "FISCH ULTIMATE | IXE",
-    Content = "Memulai Inisialisasi... Tunggu sebentar.",
+    Content = "Menghilangkan Hint & Menyiapkan Menu...",
     Duration = 3
 })
 
@@ -49,13 +49,28 @@ local Remotes = {
 -- [[ SETUP WINDOW ]]
 local Window = Fluent:CreateWindow({
     Title = "FISCH ULTIMATE | IXE",
-    SubTitle = "iPad Special Edition",
+    SubTitle = "iPad Special (No Hint)",
     TabWidth = 160,
     Size = UDim2.fromOffset(450, 420),
     Acrylic = false, 
     Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.End -- Mencegah konflik Ctrl di iPad
+    MinimizeKey = Enum.KeyCode.End -- Biar gak bentrok sama tombol iPad
 })
+
+-- [[ HINT KILLER LOGIC ]]
+-- Menghilangkan tulisan "Press End to toggle..." secara paksa
+task.spawn(function()
+    while true do
+        for _, v in pairs(PlayerGui:GetDescendants()) do
+            if v:IsA("TextLabel") and (v.Text:match("Press") and v.Text:match("toggle")) then
+                v.TextTransparency = 1
+                v.BackgroundTransparency = 1
+                v.Visible = false
+            end
+        end
+        task.wait(2) -- Scan tiap 2 detik buat jaga-jaga kalau muncul lagi
+    end
+end)
 
 local Tabs = {
     Main = Window:AddTab({ Title = "Fishing", Icon = "fish" }),
@@ -86,7 +101,7 @@ Tabs.Main:AddToggle("AutoFish", {Title = "START AUTO FISHING", Default = false }
     end
 end)
 
-Tabs.Main:AddInput("Bite", { Title = "Wait for Bite", Default = "2.5", Callback = function(v) Settings.BiteDelay = tonumber(v) or 2.5 end })
+Tabs.Main:AddInput("Bite", { Title = "Bite Delay", Default = "2.5", Callback = function(v) Settings.BiteDelay = tonumber(v) or 2.5 end })
 Tabs.Main:AddInput("CD", { Title = "Cooldown", Default = "0", Callback = function(v) Settings.Cooldown = tonumber(v) or 0 end })
 
 -- [[ SHOP PAGE ]]
@@ -99,10 +114,10 @@ Tabs.Shop:AddButton({
     end
 })
 
--- [[ FLOATING ICON IXE (THE REPAIR) ]]
+-- [[ FLOATING ICON IXE (FORCE POP-UP) ]]
 local function CreateFloatingIcon()
     local sg = Instance.new("ScreenGui", PlayerGui)
-    sg.Name = "IXE_Mobile_Toggle"
+    sg.Name = "IXE_iPad_Toggle"
     sg.DisplayOrder = 9999
     sg.ResetOnSpawn = false
     
@@ -110,12 +125,11 @@ local function CreateFloatingIcon()
     IxeBtn.Size = UDim2.new(0, 55, 0, 55)
     IxeBtn.Position = UDim2.new(0, 15, 0.5, -27)
     IxeBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-    IxeBtn.Image = "rbxassetid://6031094678" -- Ikon Circle
+    IxeBtn.Image = "rbxassetid://6031094678" 
     IxeBtn.BackgroundTransparency = 0.2
-    IxeBtn.Visible = false -- Muncul hanya saat menu tertutup
+    IxeBtn.Visible = false
     Instance.new("UICorner", IxeBtn).CornerRadius = UDim.new(0, 15)
 
-    -- Fungsi mencari Main Frame Fluent (Agresif)
     local function GetFluentMain()
         for _, v in pairs(PlayerGui:GetDescendants()) do
             if v.Name == "Main" and v:IsA("Frame") and v.Parent:IsA("ScreenGui") and v.Parent.Name:match("Fluent") then
@@ -125,7 +139,7 @@ local function CreateFloatingIcon()
         return nil
     end
 
-    -- Dragging Logic
+    -- Dragging
     local dragging, dragStart, startPos
     IxeBtn.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -140,36 +154,27 @@ local function CreateFloatingIcon()
     end)
     IxeBtn.InputEnded:Connect(function() dragging = false end)
 
-    -- CLICK LOGIC (POP UP FIX)
+    -- FORCE TOGGLE
     IxeBtn.MouseButton1Click:Connect(function()
         local main = GetFluentMain()
         if main then
-            main.Visible = true
-            IxeBtn.Visible = false
-            Fluent:Notify({ Title = "IXE", Content = "Menu Kembali Terbuka", Duration = 1 })
-        else
-            warn("Fluent Main Frame tidak ditemukan!")
+            main.Visible = true -- Paksa Muncul
+            IxeBtn.Visible = false -- Sembunyi Ixe
         end
     end)
 
-    -- Auto Monitor
     task.spawn(function()
         while task.wait(0.5) do
             local main = GetFluentMain()
             if main then
-                -- Jika menu ditutup pakai tombol minimize asli Fluent
-                if main.Visible == false then
-                    IxeBtn.Visible = true
-                else
-                    IxeBtn.Visible = false
-                end
+                IxeBtn.Visible = not main.Visible
             end
         end
     end)
 end
 CreateFloatingIcon()
 
--- [[ LIVE STATS ENGINE ]]
+-- [[ LIVE STATS & NOTIF ]]
 task.spawn(function()
     while task.wait(1) do
         if Settings.IsFarming and Stats.StartTime > 0 then
@@ -181,7 +186,6 @@ task.spawn(function()
     end
 end)
 
--- Listener Ikan
 if Remotes.Notif then
     Remotes.Notif.OnClientEvent:Connect(function()
         if Settings.IsFarming then Stats.FishCount = Stats.FishCount + 1 end
@@ -189,4 +193,4 @@ if Remotes.Notif then
 end
 
 Window:SelectTab(1)
-Fluent:Notify({ Title = "READY!", Content = "Gunakan Ikon IXE untuk memunculkan menu.", Duration = 4 })
+Fluent:Notify({ Title = "READY!", Content = "Gunakan Ikon IXE untuk memunculkan menu kembali.", Duration = 4 })
