@@ -1,27 +1,26 @@
 --[[
-    FISCH ULTIMATE V3 - IPAD STABLE
-    - Fix: No "Left Ctrl" message
-    - Fix: Missing Buttons/Toggles
-    - Fix: Floating IXE Icon for iPad
+    FISCH ULTIMATE V3 - IPAD STABLE (FIXED TOGGLE)
+    - Fix: Floating Icon won't pop up menu
+    - New: Force Re-scan Logic for iPad
+    - New: Loading & Ready Notifications
 ]]
 
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+-- [[ STARTUP NOTIF ]]
+Fluent:Notify({
+    Title = "FISCH ULTIMATE | IXE",
+    Content = "Memulai Inisialisasi... Tunggu sebentar.",
+    Duration = 3
+})
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local Player = game.Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
 
 -- [[ CONFIG & STATS ]]
-local Settings = {
-    BiteDelay = 2.5,
-    Cooldown = 0,
-    IsFarming = false,
-    IsCleanMode = false,
-    BuyID = 14,
-    BuyAmount = 1,
-    CraftName = "Anchor Charm",
-    CraftAmount = 1
-}
+local Settings = { BiteDelay = 2.5, Cooldown = 0, IsFarming = false, BuyID = 14, BuyAmount = 1, CraftName = "Anchor Charm" }
 local Stats = { StartTime = 0, FishCount = 0 }
 
 -- [[ REMOTE FINDER ]]
@@ -44,53 +43,35 @@ local Remotes = {
     StartMini = GetNet("RF/RequestFishingMinigameStarted"),
     Finish = GetNet("RF/CatchFishCompleted"),
     Purchase = GetNet("RF/PurchaseCharm"),
-    StartCraft = GetNet("RF/StartCrafting"),
-    ConfirmCraft = GetNet("RF/ConfirmCrafting"),
     Notif = GetNet("RE/ObtainedNewFishNotification")
 }
 
--- [[ 1. SETUP WINDOW ]]
+-- [[ SETUP WINDOW ]]
 local Window = Fluent:CreateWindow({
     Title = "FISCH ULTIMATE | IXE",
-    SubTitle = "iPad Fixed Version",
+    SubTitle = "iPad Special Edition",
     TabWidth = 160,
     Size = UDim2.fromOffset(450, 420),
     Acrylic = false, 
     Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.End -- Ganti ke tombol yang gak mungkin kepencet
+    MinimizeKey = Enum.KeyCode.End -- Mencegah konflik Ctrl di iPad
 })
-
--- Cari Main Frame Fluent agar bisa kita sembunyikan manual
-local FluentGui = PlayerGui:FindFirstChild("FluentGui") or PlayerGui:FindFirstChild("ScreenGui")
-local MainFrame = nil
-task.spawn(function()
-    while not MainFrame do
-        for _, v in pairs(PlayerGui:GetDescendants()) do
-            if v.Name == "Main" and v:IsA("Frame") then
-                MainFrame = v
-                break
-            end
-        end
-        task.wait(0.5)
-    end
-end)
 
 local Tabs = {
     Main = Window:AddTab({ Title = "Fishing", Icon = "fish" }),
     Shop = Window:AddTab({ Title = "Shop & Craft", Icon = "shopping-cart" })
 }
 
--- [[ 2. FISHING CONTENT ]]
+-- [[ FISHING PAGE ]]
 local StatsDisplay = Tabs.Main:AddParagraph({
     Title = "Live Statistics",
     Content = "🐟 Ikan: 0\n⏱️ Waktu: 00:00\n⚡ FPM: 0"
 })
 
--- Toggle Utama
 Tabs.Main:AddToggle("AutoFish", {Title = "START AUTO FISHING", Default = false }):OnChanged(function(v)
     Settings.IsFarming = v
     if v then
-        Stats.StartTime = tick(); Stats.FishCount = 0
+        Stats.StartTime = tick()
         task.spawn(function()
             while Settings.IsFarming do
                 pcall(function() Remotes.Cast:InvokeServer(nil, nil, tick(), nil) end)
@@ -105,59 +86,46 @@ Tabs.Main:AddToggle("AutoFish", {Title = "START AUTO FISHING", Default = false }
     end
 end)
 
-Tabs.Main:AddToggle("SFXToggle", {Title = "SFX Cleaner", Default = false }):OnChanged(function(v)
-    Settings.IsCleanMode = v
-end)
+Tabs.Main:AddInput("Bite", { Title = "Wait for Bite", Default = "2.5", Callback = function(v) Settings.BiteDelay = tonumber(v) or 2.5 end })
+Tabs.Main:AddInput("CD", { Title = "Cooldown", Default = "0", Callback = function(v) Settings.Cooldown = tonumber(v) or 0 end })
 
--- Input Field (Bukan Slider)
-Tabs.Main:AddInput("BiteInput", { Title = "Wait for Bite", Default = "2.5", Callback = function(v) Settings.BiteDelay = tonumber(v) or 2.5 end })
-Tabs.Main:AddInput("CooldownInput", { Title = "Cooldown", Default = "0", Callback = function(v) Settings.Cooldown = tonumber(v) or 0 end })
-
--- [[ 3. SHOP CONTENT ]]
-Tabs.Shop:AddInput("ItemID", { Title = "Item ID", Default = "14", Callback = function(v) Settings.BuyID = tonumber(v) or 14 end })
-Tabs.Shop:AddInput("BuyAmt", { Title = "Jumlah Beli", Default = "1", Callback = function(v) Settings.BuyAmount = tonumber(v) or 1 end })
+-- [[ SHOP PAGE ]]
+Tabs.Shop:AddInput("ID", { Title = "Item ID", Default = "14", Callback = function(v) Settings.BuyID = tonumber(v) or 14 end })
+Tabs.Shop:AddInput("Amt", { Title = "Qty", Default = "1", Callback = function(v) Settings.BuyAmount = tonumber(v) or 1 end })
 Tabs.Shop:AddButton({
-    Title = "Purchase Item",
+    Title = "Buy Item",
     Callback = function()
-        task.spawn(function()
-            for i = 1, Settings.BuyAmount do pcall(function() Remotes.Purchase:InvokeServer(Settings.BuyID) end) task.wait(0.5) end
-        end)
+        for i = 1, Settings.BuyAmount do pcall(function() Remotes.Purchase:InvokeServer(Settings.BuyID) end) task.wait(0.5) end
     end
 })
 
-Tabs.Shop:AddDropdown("CraftDropdown", {
-    Title = "Pilih Crafting",
-    Values = {"Anchor Charm", "Winged Charm", "Heart Charm", "Lure Charm"},
-    Default = "Anchor Charm",
-    Callback = function(v) Settings.CraftName = v end
-})
-Tabs.Shop:AddButton({
-    Title = "Start Crafting",
-    Callback = function()
-        pcall(function() 
-            Remotes.StartCraft:InvokeServer(Settings.CraftName)
-            task.wait(0.3)
-            Remotes.ConfirmCraft:InvokeServer()
-        end)
-    end
-})
-
--- [[ 4. FLOATING IXE ICON (FIXED FOR IPAD) ]]
+-- [[ FLOATING ICON IXE (THE REPAIR) ]]
 local function CreateFloatingIcon()
     local sg = Instance.new("ScreenGui", PlayerGui)
-    sg.Name = "IXE_Floating"
+    sg.Name = "IXE_Mobile_Toggle"
     sg.DisplayOrder = 9999
+    sg.ResetOnSpawn = false
     
     local IxeBtn = Instance.new("ImageButton", sg)
-    IxeBtn.Size = UDim2.new(0, 60, 0, 60)
-    IxeBtn.Position = UDim2.new(0, 20, 0.5, 0)
-    IxeBtn.BackgroundColor3 = Color3.fromRGB(0, 160, 255)
-    IxeBtn.Image = "rbxassetid://6031094678" -- Ikon Lingkaran
-    IxeBtn.Visible = true -- Selalu ada, kita atur lewat transparansi
-    IxeBtn.BackgroundTransparency = 0.3
+    IxeBtn.Size = UDim2.new(0, 55, 0, 55)
+    IxeBtn.Position = UDim2.new(0, 15, 0.5, -27)
+    IxeBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+    IxeBtn.Image = "rbxassetid://6031094678" -- Ikon Circle
+    IxeBtn.BackgroundTransparency = 0.2
+    IxeBtn.Visible = false -- Muncul hanya saat menu tertutup
     Instance.new("UICorner", IxeBtn).CornerRadius = UDim.new(0, 15)
 
-    -- Dragging
+    -- Fungsi mencari Main Frame Fluent (Agresif)
+    local function GetFluentMain()
+        for _, v in pairs(PlayerGui:GetDescendants()) do
+            if v.Name == "Main" and v:IsA("Frame") and v.Parent:IsA("ScreenGui") and v.Parent.Name:match("Fluent") then
+                return v
+            end
+        end
+        return nil
+    end
+
+    -- Dragging Logic
     local dragging, dragStart, startPos
     IxeBtn.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -172,28 +140,48 @@ local function CreateFloatingIcon()
     end)
     IxeBtn.InputEnded:Connect(function() dragging = false end)
 
-    -- Toggle Manual (Tanpa MinimizeKey)
+    -- CLICK LOGIC (POP UP FIX)
     IxeBtn.MouseButton1Click:Connect(function()
-        if MainFrame then
-            MainFrame.Visible = not MainFrame.Visible
-            IxeBtn.BackgroundTransparency = MainFrame.Visible and 0.8 or 0.3
+        local main = GetFluentMain()
+        if main then
+            main.Visible = true
+            IxeBtn.Visible = false
+            Fluent:Notify({ Title = "IXE", Content = "Menu Kembali Terbuka", Duration = 1 })
+        else
+            warn("Fluent Main Frame tidak ditemukan!")
+        end
+    end)
+
+    -- Auto Monitor
+    task.spawn(function()
+        while task.wait(0.5) do
+            local main = GetFluentMain()
+            if main then
+                -- Jika menu ditutup pakai tombol minimize asli Fluent
+                if main.Visible == false then
+                    IxeBtn.Visible = true
+                else
+                    IxeBtn.Visible = false
+                end
+            end
         end
     end)
 end
 CreateFloatingIcon()
 
--- [[ 5. STATS LOOP ]]
+-- [[ LIVE STATS ENGINE ]]
 task.spawn(function()
     while task.wait(1) do
         if Settings.IsFarming and Stats.StartTime > 0 then
             local elapsed = tick() - Stats.StartTime
-            local mins, secs = math.floor(elapsed / 60), math.floor(elapsed % 60)
+            local mins, secs = math.floor(elapsed/60), math.floor(elapsed%60)
             local fpm = (elapsed > 5) and math.floor((Stats.FishCount / elapsed) * 60) or 0
-            StatsDisplay:SetContent(string.format("🐟 Ikan: %d\n⏱️ Waktu: %02d:%02d\n⚡ FPM: %d", Stats.FishCount, mins, secs, fpm))
+            StatsDisplay:SetContent(string.format("🐟 Ikan Terdeteksi: %d\n⏱️ Durasi: %02d:%02d\n⚡ Kecepatan: %d FPM", Stats.FishCount, mins, secs, fpm))
         end
     end
 end)
 
+-- Listener Ikan
 if Remotes.Notif then
     Remotes.Notif.OnClientEvent:Connect(function()
         if Settings.IsFarming then Stats.FishCount = Stats.FishCount + 1 end
@@ -201,3 +189,4 @@ if Remotes.Notif then
 end
 
 Window:SelectTab(1)
+Fluent:Notify({ Title = "READY!", Content = "Gunakan Ikon IXE untuk memunculkan menu.", Duration = 4 })
