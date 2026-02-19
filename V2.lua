@@ -1,18 +1,14 @@
 --[[
-    FISCH ULTIMATE V3 - IPAD SPECIAL (NO HINT)
-    - Fix: Hilangkan tulisan "Press End to toggle"
-    - Fix: Force Pop-up Menu via IXE Icon
-    - Fix: Live Stats & Notif Ready
+    FISCH ULTIMATE V3 - STANDALONE STATS
+    - New: Standalone Stats Overlay (Always Visible)
+    - Fix: Precise Fish Detection
+    - Fix: iPad Toggle & Hint Killer
 ]]
 
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 
 -- [[ STARTUP NOTIF ]]
-Fluent:Notify({
-    Title = "FISCH ULTIMATE | IXE",
-    Content = "Menghilangkan Hint & Menyiapkan Menu...",
-    Duration = 3
-})
+Fluent:Notify({ Title = "FISCH ULTIMATE | IXE", Content = "Menyiapkan Overlay Stats & Logic...", Duration = 3 })
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
@@ -20,7 +16,7 @@ local Player = game.Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
 
 -- [[ CONFIG & STATS ]]
-local Settings = { BiteDelay = 2.5, Cooldown = 0, IsFarming = false, BuyID = 14, BuyAmount = 1, CraftName = "Anchor Charm" }
+local Settings = { BiteDelay = 2.5, Cooldown = 0, IsFarming = false, BuyID = 14, BuyAmount = 1 }
 local Stats = { StartTime = 0, FishCount = 0 }
 
 -- [[ REMOTE FINDER ]]
@@ -46,47 +42,65 @@ local Remotes = {
     Notif = GetNet("RE/ObtainedNewFishNotification")
 }
 
--- [[ SETUP WINDOW ]]
+-- [[ 1. STANDALONE OVERLAY STATS (NORMAL UI) ]]
+local function CreateNormalStats()
+    if PlayerGui:FindFirstChild("IXE_StatsOverlay") then PlayerGui.IXE_StatsOverlay:Destroy() end
+    
+    local sg = Instance.new("ScreenGui", PlayerGui); sg.Name = "IXE_StatsOverlay"; sg.ResetOnSpawn = false
+    local Frame = Instance.new("Frame", sg)
+    Frame.Size = UDim2.new(0, 160, 0, 80); Frame.Position = UDim2.new(0.5, -80, 0, 40) -- Posisi atas tengah
+    Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 25); Frame.BackgroundTransparency = 0.2
+    Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 10)
+    local Stroke = Instance.new("UIStroke", Frame); Stroke.Color = Color3.fromRGB(0, 170, 255); Stroke.Thickness = 2
+    
+    local Content = Instance.new("TextLabel", Frame)
+    Content.Name = "StatText"
+    Content.Size = UDim2.new(1, -20, 1, -20); Content.Position = UDim2.new(0, 10, 0, 10)
+    Content.BackgroundTransparency = 1; Content.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Content.Font = Enum.Font.Code; Content.TextSize = 12; Content.TextXAlignment = 0
+    Content.Text = "🐟 Fish: 0\n⏱️ Time: 00:00\n⚡ FPM: 0"
+
+    -- Dragging Logic for Stats Card
+    local dragging, dragStart, startPos
+    Frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true; dragStart = input.Position; startPos = Frame.Position
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            Frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+    Frame.InputEnded:Connect(function() dragging = false end)
+end
+CreateNormalStats()
+
+-- [[ 2. SETUP WINDOW (FLUENT) ]]
 local Window = Fluent:CreateWindow({
-    Title = "FISCH ULTIMATE | IXE",
-    SubTitle = "iPad Special (No Hint)",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(450, 420),
-    Acrylic = false, 
-    Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.End -- Biar gak bentrok sama tombol iPad
+    Title = "FISCH ULTIMATE | IXE", SubTitle = "v3.0 Standalone Stats",
+    TabWidth = 160, Size = UDim2.fromOffset(450, 380),
+    Acrylic = false, Theme = "Dark", MinimizeKey = Enum.KeyCode.End
 })
 
--- [[ HINT KILLER LOGIC ]]
--- Menghilangkan tulisan "Press End to toggle..." secara paksa
+-- Hint Killer
 task.spawn(function()
     while true do
         for _, v in pairs(PlayerGui:GetDescendants()) do
-            if v:IsA("TextLabel") and (v.Text:match("Press") and v.Text:match("toggle")) then
-                v.TextTransparency = 1
-                v.BackgroundTransparency = 1
-                v.Visible = false
-            end
+            if v:IsA("TextLabel") and (v.Text:match("Press") and v.Text:match("toggle")) then v.Visible = false end
         end
-        task.wait(2) -- Scan tiap 2 detik buat jaga-jaga kalau muncul lagi
+        task.wait(2)
     end
 end)
 
-local Tabs = {
-    Main = Window:AddTab({ Title = "Fishing", Icon = "fish" }),
-    Shop = Window:AddTab({ Title = "Shop & Craft", Icon = "shopping-cart" })
-}
+local Tabs = { Main = Window:AddTab({ Title = "Fishing", Icon = "fish" }), Shop = Window:AddTab({ Title = "Shop", Icon = "shopping-cart" }) }
 
--- [[ FISHING PAGE ]]
-local StatsDisplay = Tabs.Main:AddParagraph({
-    Title = "Live Statistics",
-    Content = "🐟 Ikan: 0\n⏱️ Waktu: 00:00\n⚡ FPM: 0"
-})
-
+-- [[ 3. FISHING LOGIC ]]
 Tabs.Main:AddToggle("AutoFish", {Title = "START AUTO FISHING", Default = false }):OnChanged(function(v)
     Settings.IsFarming = v
     if v then
-        Stats.StartTime = tick()
+        Stats.StartTime = tick(); Stats.FishCount = 0
         task.spawn(function()
             while Settings.IsFarming do
                 pcall(function() Remotes.Cast:InvokeServer(nil, nil, tick(), nil) end)
@@ -101,44 +115,36 @@ Tabs.Main:AddToggle("AutoFish", {Title = "START AUTO FISHING", Default = false }
     end
 end)
 
-Tabs.Main:AddInput("Bite", { Title = "Bite Delay", Default = "2.5", Callback = function(v) Settings.BiteDelay = tonumber(v) or 2.5 end })
+Tabs.Main:AddInput("Bite", { Title = "Wait for Bite", Default = "2.5", Callback = function(v) Settings.BiteDelay = tonumber(v) or 2.5 end })
 Tabs.Main:AddInput("CD", { Title = "Cooldown", Default = "0", Callback = function(v) Settings.Cooldown = tonumber(v) or 0 end })
 
--- [[ SHOP PAGE ]]
+-- [[ 4. SHOP LOGIC ]]
 Tabs.Shop:AddInput("ID", { Title = "Item ID", Default = "14", Callback = function(v) Settings.BuyID = tonumber(v) or 14 end })
 Tabs.Shop:AddInput("Amt", { Title = "Qty", Default = "1", Callback = function(v) Settings.BuyAmount = tonumber(v) or 1 end })
-Tabs.Shop:AddButton({
-    Title = "Buy Item",
-    Callback = function()
-        for i = 1, Settings.BuyAmount do pcall(function() Remotes.Purchase:InvokeServer(Settings.BuyID) end) task.wait(0.5) end
-    end
-})
+Tabs.Shop:AddButton({ Title = "Buy Item", Callback = function()
+    for i = 1, Settings.BuyAmount do pcall(function() Remotes.Purchase:InvokeServer(Settings.BuyID) end) task.wait(0.5) end
+end})
 
--- [[ FLOATING ICON IXE (FORCE POP-UP) ]]
+-- [[ 5. FLOATING ICON (TOGGLE MENU) ]]
 local function CreateFloatingIcon()
-    local sg = Instance.new("ScreenGui", PlayerGui)
-    sg.Name = "IXE_iPad_Toggle"
-    sg.DisplayOrder = 9999
-    sg.ResetOnSpawn = false
-    
+    local sg = Instance.new("ScreenGui", PlayerGui); sg.Name = "IXE_Toggle"; sg.DisplayOrder = 9999
     local IxeBtn = Instance.new("ImageButton", sg)
-    IxeBtn.Size = UDim2.new(0, 55, 0, 55)
-    IxeBtn.Position = UDim2.new(0, 15, 0.5, -27)
-    IxeBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-    IxeBtn.Image = "rbxassetid://6031094678" 
-    IxeBtn.BackgroundTransparency = 0.2
-    IxeBtn.Visible = false
-    Instance.new("UICorner", IxeBtn).CornerRadius = UDim.new(0, 15)
+    IxeBtn.Size = UDim2.new(0, 55, 0, 55); IxeBtn.Position = UDim2.new(0, 15, 0.5, -27)
+    IxeBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255); IxeBtn.Image = "rbxassetid://6031094678"
+    IxeBtn.BackgroundTransparency = 0.2; Instance.new("UICorner", IxeBtn).CornerRadius = UDim.new(0, 15)
 
-    local function GetFluentMain()
+    local function GetMain()
         for _, v in pairs(PlayerGui:GetDescendants()) do
-            if v.Name == "Main" and v:IsA("Frame") and v.Parent:IsA("ScreenGui") and v.Parent.Name:match("Fluent") then
-                return v
-            end
+            if v.Name == "Main" and v:IsA("Frame") and v.Parent:IsA("ScreenGui") and v.Parent.Name:match("Fluent") then return v end
         end
         return nil
     end
 
+    IxeBtn.MouseButton1Click:Connect(function()
+        local m = GetMain()
+        if m then m.Visible = not m.Visible; IxeBtn.BackgroundTransparency = m.Visible and 0.8 or 0.2 end
+    end)
+    
     -- Dragging
     local dragging, dragStart, startPos
     IxeBtn.InputBegan:Connect(function(input)
@@ -153,35 +159,20 @@ local function CreateFloatingIcon()
         end
     end)
     IxeBtn.InputEnded:Connect(function() dragging = false end)
-
-    -- FORCE TOGGLE
-    IxeBtn.MouseButton1Click:Connect(function()
-        local main = GetFluentMain()
-        if main then
-            main.Visible = true -- Paksa Muncul
-            IxeBtn.Visible = false -- Sembunyi Ixe
-        end
-    end)
-
-    task.spawn(function()
-        while task.wait(0.5) do
-            local main = GetFluentMain()
-            if main then
-                IxeBtn.Visible = not main.Visible
-            end
-        end
-    end)
 end
 CreateFloatingIcon()
 
--- [[ LIVE STATS & NOTIF ]]
+-- [[ 6. OVERLAY UPDATE LOOP ]]
 task.spawn(function()
     while task.wait(1) do
+        local label = PlayerGui.IXE_StatsOverlay.Frame.StatText
         if Settings.IsFarming and Stats.StartTime > 0 then
             local elapsed = tick() - Stats.StartTime
             local mins, secs = math.floor(elapsed/60), math.floor(elapsed%60)
             local fpm = (elapsed > 5) and math.floor((Stats.FishCount / elapsed) * 60) or 0
-            StatsDisplay:SetContent(string.format("🐟 Ikan Terdeteksi: %d\n⏱️ Durasi: %02d:%02d\n⚡ Kecepatan: %d FPM", Stats.FishCount, mins, secs, fpm))
+            label.Text = string.format("🐟 Fish: %d\n⏱️ Time: %02d:%02d\n⚡ FPM: %d", Stats.FishCount, mins, secs, fpm)
+        else
+            label.Text = "🐟 Fish: " .. Stats.FishCount .. "\n⏱️ Waiting for Start...\n⚡ FPM: 0"
         end
     end
 end)
@@ -193,4 +184,4 @@ if Remotes.Notif then
 end
 
 Window:SelectTab(1)
-Fluent:Notify({ Title = "READY!", Content = "Gunakan Ikon IXE untuk memunculkan menu kembali.", Duration = 4 })
+Fluent:Notify({ Title = "READY!", Content = "Stats Overlay Aktif (Bisa Digeser)", Duration = 4 })
